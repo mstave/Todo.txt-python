@@ -362,7 +362,7 @@ def get_config(config_name="", dir_name=""):
 		repo.add([CONFIG["TODOTXT_CFG_FILE"]])
 
 
-def repo_config():
+def repo_config(yes_re):
 	"""
 	Help the user configure their git repository.
 	"""
@@ -393,7 +393,6 @@ def repo_config():
 
 	# remote configuration
 	ret = prompt("Would you like to add a remote repository?")
-	yes_re = re.compile("y(?:es)?", re.I)
 	if yes_re.match(ret):
 		remote_host = None
 		remote_path = None
@@ -451,7 +450,7 @@ def init_repo():
 			" configure your new git repository? [y/n]",
 			prog=CONFIG["TODO_PY"])
 			if yes_re.match(val):
-				repo_config()
+				repo_config(yes_re)
 
 def default_config():
 	"""
@@ -478,12 +477,22 @@ def default_config():
 	CONFIG["PRI_C"] = "light blue"
 	CONFIG["PRI_X"] = "white"
 
+	val = prompt("Do you want to use git? [y/N]")
+	yes_re = re.compile('y(?:es)?', re.I)
+	if yes_re.match(val):
+		CONFIG["USE_GIT"] = True
+	else:
+		CONFIG["USE_GIT"] = False
+	import_git()
+
 	for k, v in CONFIG.items():
-		if k not in ("GIT", "INVERT", "LEGACY", "PLAIN", "PRE_DATE",
+		if "" != v and k not in ("GIT", "INVERT", "LEGACY", "PLAIN", "PRE_DATE",
 				"HIDE_DATE", "HIDE_CONT", "HIDE_PROJ", "NO_PRI"):
 			if v in TO_CONFIG.keys():
 				cfg.write(concat(["export ", k, "=", TO_CONFIG[v], "\n"]))
 			else:
+				if v == True or v == False:
+					v = int(v)
 				cfg.write(concat(["export ", k, '="', str(v), '"\n']))
 	cfg.close()
 	init_repo()
