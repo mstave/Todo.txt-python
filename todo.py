@@ -40,20 +40,11 @@ except NameError:
 	# Python 3 moved the built-in intern() to sys.intern()
 	intern = sys.intern
 
-try:
-	import git
-except ImportError:
-	if sys.version_info < (3, 0):
-		print("You must download and install GitPython from: \
-http://pypi.python.org/pypi/GitPython")
-	else:
-		print("GitPython is not available for Python3 last I checked.")
-	sys.exit(52)
-
 # concat() is necessary long before the grouping of function declarations
 concat = lambda str_list, sep='': sep.join(str_list)
 _path = lambda p: os.path.abspath(os.path.expanduser(p))
 _pathc = lambda plist: _path(concat(plist))
+_git = None
 
 TERM_COLORS = {
 		"black" : "\033[0;30m", "red" : "\033[0;31m",
@@ -87,7 +78,8 @@ CONFIG = {
 		"TMP_FILE" : _pathc([TODO_DIR, "/todo.tmp"]),
 		"DONE_FILE" : _pathc([TODO_DIR, "/done.txt"]),
 		"REPORT_FILE" : _pathc([TODO_DIR, "/report.txt"]),
-		"GIT" : git.Git(TODO_DIR),
+		"USE_GIT" : False,
+		"GIT" : None,
 		"PLAIN" : False,
 		"NO_PRI" : False,
 		"PRE_DATE" : False,
@@ -176,7 +168,7 @@ def _git_pull():
 	"""
 	try:
 		print(CONFIG["GIT"].pull())
-	except git.exc.GitCommandError, g:
+	except _git.exc.GitCommandError, g:
 		_git_err(g)
 
 
@@ -186,7 +178,7 @@ def _git_push():
 	"""
 	try:
 		s = CONFIG["GIT"].push()
-	except git.exc.GitCommandError, g:
+	except _git.exc.GitCommandError, g:
 		_git_err(g)
 	if s:
 		print(s)
@@ -201,7 +193,7 @@ def _git_status():
 	"""
 	try:
 		print(CONFIG["GIT"].status())
-	except git.exc.GitCommandError, g:
+	except _git.exc.GitCommandError, g:
 		_git_err(g)
 
 
@@ -230,7 +222,7 @@ def _git_commit(files, message):
 	"""
 	try:
 		CONFIG["GIT"].commit(files, "-m", message)
-	except git.exc.GitCommandError, g:
+	except _git.exc.GitCommandError, g:
 		_git_err(g)
 	if "-a" not in files:
 		print(concat(["TODO: ", concat(files, ", "), " archived."]))
@@ -265,6 +257,52 @@ def print_x_of_y(x, y):
 
 
 ### Configuration Functions
+def import_git():
+	if CONFIG["USE_GIT"]:
+		_import_gitpython()
+	else:
+		_gitpython_mock()
+
+	CONFIG["GIT"] = _git.Git(CONFIG["TODO_DIR"])
+
+def _import_gitpython():
+	global _git
+	try:
+		import git
+	except ImportError:
+		if sys.version_info < (3, 0):
+				print("You must download and install GitPython from: \
+http://pypi.python.org/pypi/GitPython")
+		else:
+			print("GitPython is not available for Python3 last I checked.")
+		sys.exit(52)
+	_git = git
+
+def _gitpython_mock():
+	global _git
+	class git_mock:
+		class Git:
+			def __init__(self, foo):
+				pass
+			def add(self, name):
+				pass
+			def pull(self):
+				pass
+			def push(self):
+				pass
+			def status(self):
+				pass
+			def log(self):
+				pass
+			def ls_files(self):
+				return ()
+			def commit(self, *args):
+				pass
+		class exc:
+			class GitCommandError:
+				pass
+	_git = git_mock
+
 def get_config(config_name="", dir_name=""):
 	"""
 	Read the config file
@@ -274,7 +312,6 @@ def get_config(config_name="", dir_name=""):
 	if dir_name:
 		CONFIG["TODO_DIR"] = _path(dir_name)
 
-	repo = CONFIG["GIT"]
 	if not CONFIG["TODOTXT_CFG_FILE"]:
 		config_file = concat([CONFIG["TODO_DIR"], "/config"])
 	else:
@@ -312,12 +349,15 @@ def get_config(config_name="", dir_name=""):
 						items[1] = concat([CONFIG[items[1][1:i]], items[1][i:]])
 					elif home_re.match(items[1][1:i]):
 						items[1] = _pathc(['~', items[1][i:]])
-				elif items[0] == "TODO_DIR":
-					CONFIG["GIT"] = git.Git(items[1])
 				else:
-					CONFIG[items[0]] = items[1]
+					try:
+						CONFIG[items[0]] = int(items[1])
+					except ValueError:
+						CONFIG[items[0]] = items[1]
 
 		f.close()
+	import_git()
+	repo = CONFIG["GIT"]
 	if CONFIG["TODOTXT_CFG_FILE"] not in repo.ls_files():
 		repo.add([CONFIG["TODOTXT_CFG_FILE"]])
 
@@ -393,7 +433,25 @@ def repo_config():
 		g.config(concat(["branch.", local_branch, ".remote"]), "origin")
 		g.config(concat(["branch.", local_branch, ".merge"]),
 				concat(["refs/heads/", remote_branch]))
+	g.add([CONFIG["TODOTXT_CFG_FILE"], CONFIG["TODO_FILE"],
+		CONFIG["TMP_FILE"], CONFIG["DONE_FILE"], CONFIG["REPORT_FILE"]])
+	g.commit("-m", CONFIG["TODO_PY"] + " initial commit.")
 
+def init_repo():
+	repo = CONFIG["GIT"]
+	try:
+		v = repo.status()
+	except _git.exc.GitCommandError, g:
+		val = prompt("Would you like to create a new git repository in\n ",
+				CONFIG["TODO_DIR"], "? [y/N]")
+		yes_re = re.compile('y(?:es)?', re.I)
+		if yes_re.match(val):
+			print(repo.init())
+			val = prompt("Would you like {prog} to help\n you",
+			" configure your new git repository? [y/n]",
+			prog=CONFIG["TODO_PY"])
+			if yes_re.match(val):
+				repo_config()
 
 def default_config():
 	"""
@@ -405,22 +463,8 @@ def default_config():
 		"""
 		open(filename, "w").close()
 
-	repo = CONFIG["GIT"]
 	if not os.path.exists(CONFIG["TODO_DIR"]):
 		os.makedirs(CONFIG["TODO_DIR"])
-	try:
-		repo.status()
-	except git.exc.GitCommandError, g:
-		val = prompt("Would you like to create a new git repository in\n ",
-				CONFIG["TODO_DIR"], "? [y/N]")
-		yes_re = re.compile('y(?:es)?', re.I)
-		if yes_re.match(val):
-			print(repo.init())
-			val = prompt("Would you like {prog} to help\n you",
-			" configure your new git repository? [y/n]",
-			prog=CONFIG["TODO_PY"])
-			if yes_re.match(val):
-				repo_config()
 
 	# touch/create files needed for the operation of the script
 	for item in ['TODO_FILE', 'TMP_FILE', 'DONE_FILE', 'REPORT_FILE']:
@@ -441,10 +485,9 @@ def default_config():
 				cfg.write(concat(["export ", k, "=", TO_CONFIG[v], "\n"]))
 			else:
 				cfg.write(concat(["export ", k, '="', str(v), '"\n']))
+	cfg.close()
+	init_repo()
 
-	repo.add([CONFIG["TODOTXT_CFG_FILE"], CONFIG["TODO_FILE"],
-	CONFIG["TMP_FILE"], CONFIG["DONE_FILE"], CONFIG["REPORT_FILE"]])
-	repo.commit("-m", CONFIG["TODO_PY"] + " initial commit.")
 	print(concat(["Default configuration completed. Please ",
 		"re-run\n {prog} with '-h' and 'help' separately.".format(
 			prog=CONFIG["TODO_PY"])]))
@@ -458,7 +501,6 @@ def add_todo(line):
 	Add a new item to the list of things todo.
 	"""
 	prepend = CONFIG["PRE_DATE"]
-	_git = CONFIG["GIT"]
 	fd = open(CONFIG["TODO_FILE"], "r+")
 	l = len(fd.readlines()) + 1
 	pri_re = re.compile('(\([A-X]\))')
@@ -628,7 +670,7 @@ def prepend_todo(args):
 			new_line = concat([prepend_str, old_line])
 
 		lines.insert(line_no - 1, new_line)
-		
+
 		rewrite_and_post(line_no, old_line, new_line, lines)
 	else:
 		post_error('prepend', 'NUMBER', 'string')
@@ -847,7 +889,7 @@ def _list_by_(*args):
 			if regexp.search(line):
 				matched_lines.append(line)
 		lines = matched_lines[:]
-	
+
 	print(concat(lines)[:-1])
 	print_x_of_y(lines, alines)
 
@@ -1015,12 +1057,16 @@ if __name__ == "__main__" :
 			"listproj"	: (False, list_project),
 			"h"			: (False, cmd_help),
 			"help"		: (False, cmd_help),
-			# Git functions:
-			"push"		: (False, _git_push),
-			"pull"		: (False, _git_pull),
-			"status"	: (False, _git_status),
-			"log"		: (False, _git_log),
 			}
+	if CONFIG["USE_GIT"]:
+		git_commands = {
+				"push"		: (False, _git_push),
+				"pull"		: (False, _git_pull),
+				"status"	: (False, _git_status),
+				"log"		: (False, _git_log),
+				}
+		commands.update(git_commands)
+
 	commandsl = [intern(key) for key in commands.keys()]
 
 	if not len(args) > 0:
