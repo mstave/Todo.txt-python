@@ -456,20 +456,6 @@ def default_config():
 	"""
 	Set up the default configuration file.
 	"""
-	def touch(filename):
-		"""
-		Create files if they aren't already there.
-		"""
-		open(filename, "w").close()
-
-	if not os.path.exists(CONFIG["TODO_DIR"]):
-		os.makedirs(CONFIG["TODO_DIR"])
-
-	# touch/create files needed for the operation of the script
-	for item in ['TODO_FILE', 'TMP_FILE', 'DONE_FILE', 'REPORT_FILE']:
-		touch(CONFIG[item])
-
-	cfg = open(concat([CONFIG["TODO_DIR"], "/config"]), 'w')
 
 	# set the defaults for the colors
 	CONFIG["PRI_A"] = "yellow"
@@ -485,6 +471,20 @@ def default_config():
 		CONFIG["USE_GIT"] = False
 	import_git()
 
+	def touch(filename):
+		"""
+		Create files if they aren't already there.
+		"""
+		open(filename, "w").close()
+
+	if not os.path.exists(CONFIG["TODO_DIR"]):
+		os.makedirs(CONFIG["TODO_DIR"])
+
+	# touch/create files needed for the operation of the script
+	for item in ['TODO_FILE', 'TMP_FILE', 'DONE_FILE', 'REPORT_FILE']:
+		touch(CONFIG[item])
+
+	cfg = open(concat([CONFIG["TODO_DIR"], "/config"]), 'w')
 	for k, v in CONFIG.items():
 		if "" != v and k not in ("GIT", "INVERT", "LEGACY", "PLAIN", "PRE_DATE",
 				"HIDE_DATE", "HIDE_CONT", "HIDE_PROJ", "NO_PRI"):
