@@ -123,7 +123,6 @@ def separate_line(number):
 	that position in the list. The list is the rest of the todos.
 	"""
 	lines = [line for line in iter_todos()]
-	print lines, number
 	if len(lines) == 0:
 		return (None,[])
 	separate = lines.pop(number - 1)
@@ -780,7 +779,7 @@ def format_lines(color_only=False):
 				try:
 					col = TERM_COLORS[CONFIG["PRI_{0}".format(category)]]
 				except:
-					col = TERM_COLORS[CONFIG["PRI_X"]]
+					col = default
 			if no_priority:
 				line = pri_re.sub("", line)
 		else:
