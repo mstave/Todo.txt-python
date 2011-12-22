@@ -1032,6 +1032,7 @@ def opt_setup():
 	return opts
 
 
+import_git()
 if __name__ == "__main__" :
 	CONFIG["TODO_PY"] = sys.argv[0]
 	opts = opt_setup()
