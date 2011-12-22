@@ -39,6 +39,10 @@ try:
 except NameError:
 	# Python 3 moved the built-in intern() to sys.intern()
 	intern = sys.intern
+try:
+	PRIORITIES = string.uppercase[0:24]
+except AttributeError:
+	PRIORITIES = string.ascii_uppercase[0:24]
 
 # concat() is necessary long before the grouping of function declarations
 concat = lambda str_list, sep='': sep.join(str_list)
@@ -68,7 +72,6 @@ for key in TERM_COLORS.keys():
 del(key, bkey)  # If someone were to import this as a module, these show up.
 
 TODO_DIR = _path('~/.todo')
-PRIORITIES = string.uppercase[0:24]
 
 CONFIG = {
 		"TODO_DIR" : TODO_DIR,
@@ -119,15 +122,11 @@ def separate_line(number):
 	Takes an integer and returns a string and a list. The string is the item at
 	that position in the list. The list is the rest of the todos.
 	"""
-	i = 1
-	lines = []
-	for line in iter_todos():
-		if i != number:
-			lines.append(line)
-		else:
-			separate = line
-		i += 1
-	
+	lines = [line for line in iter_todos()]
+	print lines, number
+	if len(lines) == 0:
+		return (None,[])
+	separate = lines.pop(number - 1)
 	return separate, lines
 
 
@@ -618,7 +617,8 @@ def append_todo(args):
 	if args[0].isdigit():
 		line_no = int(args.pop(0))
 		old_line, lines = separate_line(line_no)
-		new_line = concat([concat([old_line, concat(args, " ")],  " "), "\n"],)
+		new_line = concat([concat([old_line[:-1], concat(args, " ")],  " "), "\n"],)
+		lines.insert(line_no - 1, new_line)
 
 		rewrite_and_post(line_no, old_line, new_line, lines)
 	else:
@@ -629,7 +629,7 @@ def prioritize_todo(args):
 	"""
 	Add or modify the priority of the specified item.
 	"""
-	if args[0].isdigit():
+	if args[0].isdigit() and len(args[1]) == 1 and args[1] in PRIORITIES:
 		line_no = int(args.pop(0))
 		old_line, lines = separate_line(line_no)
 		new_pri = concat(["(", args[0], ") "])
@@ -643,7 +643,7 @@ def prioritize_todo(args):
 
 		rewrite_and_post(line_no, old_line, new_line, lines)
 	else:
-		post_error('pri', 'NUMBER', 'capital letter')
+		post_error('pri', 'NUMBER', 'capital letter in [A-X]')
 
 
 def de_prioritize_todo(number):
