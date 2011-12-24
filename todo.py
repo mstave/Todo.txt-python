@@ -124,9 +124,9 @@ def separate_line(number):
 	"""
 	lines = [line for line in iter_todos()]
 	if lines:
-		separate = None
-	else:
 		separate = lines.pop(number - 1)
+	else:
+		separate = None
 	return separate, lines
 
 
