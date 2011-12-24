@@ -98,10 +98,8 @@ del(p)
 
 ### Helper Functions
 def todo_padding():
-	i = 0
-	with open(CONFIG["TODO_FILE"]) as fd:
-		for l in fd:
-			i += 1  # This is just a little bit more obvious.
+	lines = [1 for line in iter_todos()]
+	i = len(lines)
 	pad = 1
 	while i >= 10:
 		pad += 1
