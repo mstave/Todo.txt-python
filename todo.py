@@ -1076,9 +1076,8 @@ if __name__ == "__main__" :
 	if not len(args) > 0:
 		args.append(CONFIG["TODOTXT_DEFAULT_ACTION"])
 
-	append_re = re.compile('app(?:end)?')
+	allwords_re = re.compile('(app|pre)(?:end)?')
 	pri_re = re.compile('p(?:ri)?')
-	prepend_re = re.compile('pre(?:end)?')
 
 	while args:
 		# ensure this doesn't error because of a faulty CAPS LOCK key
@@ -1087,10 +1086,10 @@ if __name__ == "__main__" :
 			if not commands[arg][0]:
 				commands[arg][1]()
 			else:
-				if append_re.match(arg) or arg in ["ls", "list"]:
+				if allwords_re.match(arg) or arg in ["ls", "list"]:
 					commands[arg][1](args)
 					args = None
-				elif pri_re.match(arg) or prepend_re.match(arg):
+				elif pri_re.match(arg):
 					commands[arg][1](args[:2])
 					args = args[2:]
 				else:
