@@ -39,9 +39,11 @@ try:
 except NameError:
 	# Python 3 moved the built-in intern() to sys.intern()
 	intern = sys.intern
+
 try:
 	PRIORITIES = string.uppercase[0:24]
 except AttributeError:
+	# Python 3 again
 	PRIORITIES = string.ascii_uppercase[0:24]
 
 # concat() is necessary long before the grouping of function declarations
@@ -76,7 +78,7 @@ TODO_DIR = _path('~/.todo')
 CONFIG = {
 		"TODO_DIR" : TODO_DIR,
 		"TODOTXT_DEFAULT_ACTION" : "",
-		"TODOTXT_CFG_FILE" : "",
+		"TODOTXT_CFG_FILE" : _pathc([TODO_DIR, "/config"]),
 		"TODO_FILE" : _pathc([TODO_DIR, "/todo.txt"]),
 		"TMP_FILE" : _pathc([TODO_DIR, "/todo.tmp"]),
 		"DONE_FILE" : _pathc([TODO_DIR, "/done.txt"]),
@@ -92,8 +94,10 @@ CONFIG = {
 		"HIDE_DATE" : False,
 		"LEGACY" : False,
 		}
-for p in PRIORITIES: CONFIG["PRI_{0}".format(p)] = ""
-del(p)
+
+for p in PRIORITIES:
+	CONFIG["PRI_{0}".format(p)] = "default"
+del(p, TODO_DIR)
 
 
 ### Helper Functions
@@ -105,6 +109,7 @@ def todo_padding():
 		pad += 1
 		i /= 10
 	return pad
+
 
 def iter_todos():
 	"""
@@ -321,38 +326,30 @@ def get_config(config_name="", dir_name=""):
 		default_config()
 	else:
 		f = open(config_file, 'r')
-		comment_re = re.compile('#')
-		bash_var_re = re.compile('$')
-		bash_val_re = re.compile('=')
+		skip_re = re.compile('#|$')
+		strip_re = re.compile('\w+\s([A-Za-z_$="./]+).*')
 		pri_re = re.compile('(PRI_[A-X]|DEFAULT)')
 		home_re = re.compile('home', re.I)
-		for line in f.readlines():
-			if not (comment_re.match(line) or bash_var_re.match(line)):
-				line = line.strip()
-				i = line.find(' ') + 1
-				if i > 0:
-					line = line[i:]
-				items = bash_val_re.split(line)
-				items[1] = items[1].strip('"')
-				i = items[1].find(' ')
-				if i > 0:
-					items[1] = items[1][:i]
-				if pri_re.match(items[0]):
-					CONFIG[items[0]] = FROM_CONFIG[items[1]]
-				elif '/' in items[1] and '$' in items[1]:
-					# elision for path names
-					i = items[1].find('/')
-					if items[1][1:i] in CONFIG.keys():
-						items[1] = concat([CONFIG[items[1][1:i]], items[1][i:]])
-					elif home_re.match(items[1][1:i]):
-						items[1] = _pathc(['~', items[1][i:]])
-				else:
-					try:
-						CONFIG[items[0]] = int(items[1])
-					except ValueError:
+
+		with open(config_file, 'r') as f:
+			for line in f:
+				if not skip_re.match(line):
+					# Extract VAR=VAL and then split VAR and VAL
+					items = strip_re.sub('\g<1>', line.strip()).split('=')
+					items[1] = items[1].strip('"')
+
+					if pri_re.match(items[0]):
+						CONFIG[items[0]] = FROM_CONFIG[items[1]]
+					elif '/' in items[1] and '$' in items[1]:
+						# elision for path names
+						i = items[1].find('/')
+						if items[1][1:i] in CONFIG.keys():
+							items[1] = concat([CONFIG[items[1][1:i]], items[1][i:]])
+						elif home_re.match(items[1][1:i]):
+							items[1] = _pathc(['~', items[1][i:]])
+					else:
 						CONFIG[items[0]] = items[1]
 
-		f.close()
 	import_git()
 	repo = CONFIG["GIT"]
 	if CONFIG["TODOTXT_CFG_FILE"] not in repo.ls_files():
@@ -485,14 +482,14 @@ def default_config():
 	for k, v in CONFIG.items():
 		if "" != v and k not in ("GIT", "INVERT", "LEGACY", "PLAIN", "PRE_DATE",
 				"HIDE_DATE", "HIDE_CONT", "HIDE_PROJ", "NO_PRI"):
+			if v == True or v == False:
+				v = int(v)
 			if v in TO_CONFIG.keys():
 				cfg.write(concat(["export ", k, "=", TO_CONFIG[v], "\n"]))
 			else:
-				if v == True or v == False:
-					v = int(v)
 				cfg.write(concat(["export ", k, '="', str(v), '"\n']))
-	cfg.close()
 	init_repo()
+	cfg.close()
 
 	print(concat(["Default configuration completed. Please ",
 		"re-run\n {prog} with '-h' and 'help' separately.".format(
@@ -529,8 +526,7 @@ def addm_todo(lines):
 	Add new items to the list of things todo.
 	"""
 	lines = lines.split("\n")
-	for line in lines:
-		add_todo(line)
+	map(add_todo, lines)
 ### End new todo functions
 
 
@@ -729,20 +725,21 @@ def cmd_help():
 	print('\t\tAdd "text to prepend" to the beginning of the item.')
 	print("")
 	print("\tpri | p NUMBER [A-X]")
-	print("\t\tAdd priority specified (A, B, or C) to item NUMBER.")
-	print("")
-	print("\tpull")
-	print("\t\tPulls from the remote for your git repository.")
-	print("")
-	print("\tpush")
-	print("\t\tPushs to the remote for your git repository.")
-	print("")
-	print("\tstatus")
-	print("\t\tIf using $(git --version) > 1.7, shows the status of your")
-	print("\t\tlocal git repository.")
-	print("")
-	print("\tlog")
-	print("\t\tShows the last two commits in your local git repository.")
+	print("\t\tAdd priority specified (A, B, C, etc.) to item NUMBER.")
+	if CONFIG["USE_GIT"]:
+		print("")
+		print("\tpull")
+		print("\t\tPulls from the remote for your git repository.")
+		print("")
+		print("\tpush")
+		print("\t\tPushs to the remote for your git repository.")
+		print("")
+		print("\tstatus")
+		print("\t\tIf using $(git --version) > 1.7, shows the status of your")
+		print("\t\tlocal git repository.")
+		print("")
+		print("\tlog")
+		print("\t\tShows the last two commits in your local git repository.")
 	sys.exit(0)
 ### HELP
 
@@ -766,32 +763,32 @@ def format_lines(color_only=False):
 		formatted = {}
 		map(_m, PRIORITIES)
 
-	pri_re = re.compile('^\(([A-X])\)\s')
+	pri_re = re.compile('^\(([A-W])\)\s')
 	pad = todo_padding()
-	for (i,line) in enumerate(iter_todos()):
+	for (i, line) in enumerate(iter_todos()):
 		r = pri_re.match(line)
 		if r:
 			category = r.groups()[0]
 			if plain:
-				col = default
+				color = default
 			else:
-				try:
-					col = TERM_COLORS[CONFIG["PRI_{0}".format(category)]]
-				except:
-					col = default
+				k = CONFIG["PRI_{0}".format(category)]
+				if k in TERM_COLORS.keys():
+					color = TERM_COLORS[k]
+				else:
+					color = default
 			if no_priority:
 				line = pri_re.sub("", line)
 		else:
 			category = "X"
-			col = default
+			color = default
 
 		j = i + 1
-		l = concat([col, invert, str(j).zfill(pad), " ", line[:-1], default, "\n"])
+		l = concat([color, invert, str(j).zfill(pad), " ", line[:-1], default, "\n"])
 		if color_only:
 			formatted.append(l)
 		else:
 			formatted[category].append(l)
-		i += 1
 
 	return formatted
 
@@ -807,10 +804,9 @@ def _legacy_sort(items):
 	"""
 	line_re = re.compile('^.*\d+\s(\([A-X]\)\s)?')
 	# The .* in the regexp is needed for the \033[* codes
-	keys = [line_re.sub("", i) for i in items]
-	items_dict = dict(zip(keys, items))
-	keys.sort()
-	items = [items_dict[k] for k in keys]
+	items = [(line_re.sub("", i), i) for i in items]
+	items.sort()
+	items = [line for (k, line) in items]
 	return items
 
 
@@ -893,12 +889,11 @@ def _list_by_(*args):
 	matched_lines = []
 
 	for regexp in relist:
-		for line in lines:
-			if regexp.search(line):
-				matched_lines.append(line)
+		matched_lines = [line for line in lines if regexp.search(line)]
 		lines = matched_lines[:]
-
-	print(concat(lines)[:-1])
+	
+	if lines:
+		print(concat(lines)[:-1])
 	print_x_of_y(lines, alines)
 
 
@@ -1068,13 +1063,12 @@ if __name__ == "__main__" :
 			"help"		: (False, cmd_help),
 			}
 	if CONFIG["USE_GIT"]:
-		git_commands = {
-				"push"		: (False, _git_push),
-				"pull"		: (False, _git_pull),
-				"status"	: (False, _git_status),
-				"log"		: (False, _git_log),
-				}
-		commands.update(git_commands)
+		commands.update(
+				[("push", (False, _git_push)),
+				("pull", (False, _git_pull)),
+				("status", (False, _git_status)),
+				("log", (False, _git_log))]
+				)
 
 	commandsl = [intern(key) for key in commands.keys()]
 
