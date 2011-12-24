@@ -500,10 +500,19 @@ def default_config():
 
 
 ### New todo Functions
-def add_todo(line):
+def add_todo(args):
 	"""
 	Add a new item to the list of things todo.
 	"""
+	l = len(args)
+	if str(args) == args:
+		line = args
+	elif l == 1:
+		line = args[0]
+	elif l > 1:
+		line = " ".join(args)
+	else:
+		line = raw_input("Add: ")
 	prepend = CONFIG["PRE_DATE"]
 	fd = open(CONFIG["TODO_FILE"], "r+")
 	l = len(fd.readlines()) + 1
@@ -522,12 +531,17 @@ def add_todo(line):
 	_git_commit([CONFIG["TODO_FILE"]], s)
 
 
-def addm_todo(lines):
+def addm_todo(args):
 	"""
 	Add new items to the list of things todo.
 	"""
+	if str(args) == args:
+		lines = args
+	else:
+		lines = " ".join(args)
 	lines = lines.split("\n")
-	map(add_todo, lines)
+	for line in lines:
+		add_todo([line])
 ### End new todo functions
 
 
@@ -624,7 +638,7 @@ def prioritize_todo(args):
 	"""
 	Add or modify the priority of the specified item.
 	"""
-	if args[0].isdigit() and len(args[1]) == 1 and args[1] in PRIORITIES:
+	if len(args) == 2 and args[0].isdigit() and len(args[1]) == 1 and args[1] in PRIORITIES:
 		line_no = int(args.pop(0))
 		old_line, lines = separate_line(line_no)
 		new_pri = concat(["(", args[0], ") "])
@@ -1076,8 +1090,7 @@ if __name__ == "__main__" :
 	if not len(args) > 0:
 		args.append(CONFIG["TODOTXT_DEFAULT_ACTION"])
 
-	allwords_re = re.compile('(app|pre)(?:end)?')
-	pri_re = re.compile('p(?:ri)?')
+	allwords_re = re.compile('(p(?:ri)?|(app|pre)(?:end)?)')
 
 	while args:
 		# ensure this doesn't error because of a faulty CAPS LOCK key
@@ -1086,12 +1099,9 @@ if __name__ == "__main__" :
 			if not commands[arg][0]:
 				commands[arg][1]()
 			else:
-				if allwords_re.match(arg) or arg in ["ls", "list"]:
+				if allwords_re.match(arg) or arg in ["ls", "list", "a", "add", "addm"]:
 					commands[arg][1](args)
 					args = None
-				elif pri_re.match(arg):
-					commands[arg][1](args[:2])
-					args = args[2:]
 				else:
 					commands[arg][1](args.pop(0))
 		else:
