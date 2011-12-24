@@ -25,7 +25,8 @@ import sys
 from optparse import OptionParser
 from datetime import datetime, date
 
-VERSION = "0.1-master_dev"
+VERSION = "0.1-optgit_dev"
+REVISION = "$Id$"
 
 try:
 	import readline
