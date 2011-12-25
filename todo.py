@@ -540,8 +540,7 @@ def addm_todo(args):
 	else:
 		lines = " ".join(args)
 	lines = lines.split("\n")
-	for line in lines:
-		add_todo([line])
+	map(add_todo, lines)
 ### End new todo functions
 
 
