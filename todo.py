@@ -327,10 +327,9 @@ def get_config(config_name="", dir_name=""):
 		default_config()
 	else:
 		f = open(config_file, 'r')
-		skip_re = re.compile('#|$')
+		skip_re = re.compile('^\s*(#|$)')
 		strip_re = re.compile('\w+\s([A-Za-z_$="./]+).*')
 		pri_re = re.compile('(PRI_[A-X]|DEFAULT)')
-		home_re = re.compile('home', re.I)
 
 		with open(config_file, 'r') as f:
 			for line in f:
@@ -341,15 +340,12 @@ def get_config(config_name="", dir_name=""):
 
 					if pri_re.match(items[0]):
 						CONFIG[items[0]] = FROM_CONFIG[items[1]]
-					elif '/' in items[1] and '$' in items[1]:
-						# elision for path names
-						i = items[1].find('/')
-						if items[1][1:i] in CONFIG.keys():
-							items[1] = concat([CONFIG[items[1][1:i]], items[1][i:]])
-						elif home_re.match(items[1][1:i]):
-							items[1] = _pathc(['~', items[1][i:]])
 					else:
+						items[1] = os.path.expandvars(items[1])
 						CONFIG[items[0]] = items[1]
+
+					# make expandvars work for our vars too
+					os.environ[items[0]] = items[1]
 
 	import_git()
 	repo = CONFIG["GIT"]
@@ -427,8 +423,12 @@ def repo_config(yes_re):
 		g.config(concat(["branch.", local_branch, ".remote"]), "origin")
 		g.config(concat(["branch.", local_branch, ".merge"]),
 				concat(["refs/heads/", remote_branch]))
-	g.add([CONFIG["TODOTXT_CFG_FILE"], CONFIG["TODO_FILE"],
-		CONFIG["TMP_FILE"], CONFIG["DONE_FILE"], CONFIG["REPORT_FILE"]])
+	# TODO: if config file isn't in TODO_DIR, this will cause an error
+	files=[CONFIG["TODOTXT_CFG_FILE"], CONFIG["TODO_FILE"]]
+	for setting in ["DONE_FILE", "REPORT_FILE", "TMP_FILE"]:
+		if CONFIG[setting]:
+			files.append(CONFIG[setting])
+	g.add(files)
 	g.commit("-m", CONFIG["TODO_PY"] + " initial commit.")
 
 def init_repo():
@@ -477,11 +477,12 @@ def default_config():
 
 	# touch/create files needed for the operation of the script
 	for item in ['TODO_FILE', 'TMP_FILE', 'DONE_FILE', 'REPORT_FILE']:
-		touch(CONFIG[item])
+		if CONFIG[item]:
+			touch(CONFIG[item])
 
 	cfg = open(concat([CONFIG["TODO_DIR"], "/config"]), 'w')
 	for k, v in CONFIG.items():
-		if "" != v and k not in ("GIT", "INVERT", "LEGACY", "PLAIN", "PRE_DATE",
+		if v and k not in ("GIT", "INVERT", "LEGACY", "PLAIN", "PRE_DATE",
 				"HIDE_DATE", "HIDE_CONT", "HIDE_PROJ", "NO_PRI"):
 			if v == True or v == False:
 				v = int(v)
@@ -562,13 +563,17 @@ def do_todo(line):
 		removed = re.sub("\([A-X]\)\s?", "", removed)
 		removed = "x " + today + " " + removed
 
-		fd = open(CONFIG["DONE_FILE"], "a")
-		fd.write(removed)
-		fd.close()
+		files = [CONFIG["TODO_FILE"]]
+		dfile = CONFIG["DONE_FILE"]
+		if dfile:
+			fd = open(dfile, "a")
+			fd.write(removed)
+			fd.close()
+			files.append(dfile)
 
 		print(removed[:-1])
 		print("TODO: Item {0} marked as done.".format(line))
-		_git_commit([CONFIG["TODO_FILE"], CONFIG["DONE_FILE"]], removed)
+		_git_commit(files, removed)
 
 
 def delete_todo(line):
